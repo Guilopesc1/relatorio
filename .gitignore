@@ -1,8 +1,22 @@
 # Arquivos de configuracao sensivel 
 .env 
 .env.* 
+.env.secure.backup
 client_secret_*.json 
 __pycache__/ 
 *.pyc 
 logs/ 
 backup/ 
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+*.egg-info/
+dist/
+build/

@@ -1,0 +1,37 @@
+# Dockerfile ULTRA-SIMPLES - SEM SUPERVISORD
+FROM python:3.11-slim
+
+# Instala dependências mínimas
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+# Workdir
+WORKDIR /app
+
+# Copia e instala requirements
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+# Cria usuário
+RUN useradd -m appuser && chown -R appuser:appuser /app
+
+# Copia aplicação
+COPY --chown=appuser:appuser . .
+
+# Cria logs
+RUN mkdir -p /app/logs && chown -R appuser:appuser /app/logs
+
+# Script ultra-simples
+RUN echo '#!/bin/bash\n\
+echo "🚀 Facebook Reports - Ultra Simple Start"\n\
+for var in SUPABASE_URL SUPABASE_KEY FACEBOOK_ACCESS_TOKEN; do\n\
+  if [ -z "${!var}" ]; then echo "❌ $var not set"; exit 1; fi\n\
+done\n\
+echo "✅ All variables set"\n\
+mkdir -p /app/logs\n\
+chown appuser:appuser /app/logs\n\
+echo "🎯 Starting Flask as appuser"\n\
+exec su appuser -c "cd /app && python app.py"\n\
+' > /start.sh && chmod +x /start.sh
+
+EXPOSE 5000
+ENTRYPOINT ["/start.sh"]

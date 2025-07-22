@@ -1,0 +1,112 @@
+# Dockerfile para Facebook Reports System - Produção (Corrigido para EasyPanel)
+FROM python:3.11-slim
+
+# Metadata
+LABEL maintainer="Facebook Reports System"
+LABEL version="1.0.1"
+LABEL description="Sistema de coleta automatizada Facebook/Google Ads"
+
+# Variáveis de ambiente de sistema
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PIP_NO_CACHE_DIR=1
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Instala dependências do sistema como root
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    curl \
+    cron \
+    supervisor \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Define diretório de trabalho
+WORKDIR /app
+
+# Copia requirements primeiro (para cache do Docker)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Cria estrutura de diretórios com permissões corretas
+RUN mkdir -p /app/logs /app/logs/history /app/data /app/config \
+    && chmod 755 /app /app/logs /app/data /app/config
+
+# Copia código da aplicação
+COPY . .
+
+# Cria usuário não-root DEPOIS de copiar arquivos
+RUN groupadd -r appuser && useradd -r -g appuser -m -d /home/appuser -s /bin/bash appuser
+
+# Define permissões para appuser nos diretórios necessários
+RUN chown -R appuser:appuser /app/logs /app/data \
+    && chmod -R 755 /app/logs /app/data
+
+# Copia arquivos de configuração se existirem
+RUN if [ -f "production/config/supervisord.conf" ]; then \
+        cp production/config/supervisord.conf /etc/supervisor/conf.d/supervisord.conf; \
+    fi
+
+# Cria script de entrypoint simplificado
+RUN echo '#!/bin/bash\n\
+set -e\n\
+echo "🚀 Facebook Reports System - Starting Production Container"\n\
+\n\
+# Valida variáveis críticas\n\
+REQUIRED_VARS=("SUPABASE_URL" "SUPABASE_KEY" "FACEBOOK_ACCESS_TOKEN")\n\
+echo "🔍 Validating required environment variables..."\n\
+for var in "${REQUIRED_VARS[@]}"; do\n\
+    if [ -z "${!var}" ]; then\n\
+        echo "❌ ERROR: Required environment variable $var is not set"\n\
+        exit 1\n\
+    fi\n\
+done\n\
+\n\
+# Cria arquivos de log se não existirem\n\
+echo "📁 Setting up log files..."\n\
+touch /app/logs/app.log /app/logs/daily_update.log /app/logs/error.log\n\
+\n\
+# Configura cron job se solicitado\n\
+if [ "$ENABLE_CRON" = "true" ]; then\n\
+    HOUR=${DAILY_UPDATE_HOUR:-6}\n\
+    echo "⏰ Setting up daily update at ${HOUR}:00"\n\
+    echo "0 ${HOUR} * * * cd /app && python daily_auto_update.py >> /app/logs/daily_update.log 2>&1" > /tmp/crontab.txt\n\
+    crontab -u appuser /tmp/crontab.txt\n\
+    service cron start\n\
+fi\n\
+\n\
+echo "🎯 Starting application as appuser"\n\
+\n\
+# Executa como appuser\n\
+exec gosu appuser "$@"\n\
+' > /entrypoint.sh && chmod +x /entrypoint.sh
+
+# Instala gosu para mudança segura de usuário
+RUN curl -o /usr/local/bin/gosu -SL "https://github.com/tianon/gosu/releases/download/1.14/gosu-$(dpkg --print-architecture)" \
+    && chmod +x /usr/local/bin/gosu \
+    && gosu nobody true
+
+# Cria script de healthcheck
+RUN echo '#!/bin/bash\n\
+if pgrep -f "python.*app.py" > /dev/null; then\n\
+    echo "Application is running"\n\
+    exit 0\n\
+else\n\
+    echo "Application is not running"\n\
+    exit 1\n\
+fi\n\
+' > /healthcheck.sh && chmod +x /healthcheck.sh
+
+# Expõe porta da aplicação web
+EXPOSE 5000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD /healthcheck.sh
+
+# Entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
+
+# Comando padrão - executa como appuser
+CMD ["python", "app.py"]

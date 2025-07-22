@@ -1,0 +1,15 @@
+# Crontab para Facebook Reports System - Produção
+# Executa atualização diária às 06:00 UTC
+0 6 * * * cd /app && python daily_auto_update.py >> /app/logs/daily_update.log 2>&1
+
+# Limpeza automática de logs antigos (domingo às 02:00)
+0 2 * * 0 find /app/logs/history -name "*.json" -mtime +30 -delete
+
+# Rotação de logs principais (diário às 03:00)
+0 3 * * * [ -f /app/logs/app.log ] && tail -n 1000 /app/logs/app.log > /tmp/app.log.tmp && mv /tmp/app.log.tmp /app/logs/app.log
+
+# Health check do sistema (a cada 4 horas)
+0 */4 * * * /healthcheck.sh >> /app/logs/health.log 2>&1 || echo "Health check failed at $(date)" >> /app/logs/health.log
+
+# Backup semanal dos dados críticos (segunda às 01:00)
+0 1 * * 1 tar -czf /app/data/backup_$(date +\%Y\%m\%d).tar.gz /app/logs/history/ && find /app/data/backup_*.tar.gz -mtime +7 -delete

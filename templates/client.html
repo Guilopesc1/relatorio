@@ -1,0 +1,389 @@
+{% extends "base.html" %}
+
+{% block title %}{{ client.name }} - {{ platform|title }} - Facebook Reports System{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <!-- Breadcrumb -->
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item">
+                    <a href="{{ url_for('index') }}">
+                        <i class="fas fa-home me-1"></i>Início
+                    </a>
+                </li>
+                <li class="breadcrumb-item active">{{ client.name }}</li>
+                <li class="breadcrumb-item active">{{ platform|title }}</li>
+            </ol>
+        </nav>
+        
+        <!-- Header do cliente -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h2 class="mb-0">
+                        {% if platform == 'facebook' %}
+                            <i class="fab fa-facebook-f me-2 text-primary"></i>
+                        {% else %}
+                            <i class="fab fa-google me-2 text-warning"></i>
+                        {% endif %}
+                        {{ client.name }}
+                    </h2>
+                    <span class="badge bg-success">
+                        <i class="fas fa-circle me-1"></i>Ativo
+                    </span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p class="mb-2">
+                            <strong>ID do Cliente:</strong> {{ client.id }}
+                        </p>
+                        <p class="mb-2">
+                            <strong>Plataforma:</strong> 
+                            <span class="badge bg-{{ 'primary' if platform == 'facebook' else 'warning' }} text-{{ 'white' if platform == 'facebook' else 'dark' }}">
+                                {{ platform|title }}
+                            </span>
+                        </p>
+                        <p class="mb-0">
+                            <strong>Conta da Plataforma:</strong> 
+                            {% if platform == 'facebook' %}
+                                {{ client.act_fb or 'Não configurada' }}
+                            {% else %}
+                                {{ client.id_google or 'Não configurada' }}
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="col-md-6">
+                        {% if platform == 'facebook' and client.ultimo_relatorio_fb %}
+                            <p class="mb-2">
+                                <strong>Último Relatório:</strong><br>
+                                <small class="text-muted">{{ client.ultimo_relatorio_fb }}</small>
+                            </p>
+                        {% elif platform == 'google' and client.ultimo_relatorio_google %}
+                            <p class="mb-2">
+                                <strong>Último Relatório:</strong><br>
+                                <small class="text-muted">{{ client.ultimo_relatorio_google }}</small>
+                            </p>
+                        {% endif %}
+                        
+                        {% if platform == 'facebook' and client.ultimo_envio_fb %}
+                            <p class="mb-0">
+                                <strong>Último Envio:</strong><br>
+                                <small class="text-muted">{{ client.ultimo_envio_fb }}</small>
+                            </p>
+                        {% elif platform == 'google' and client.ultimo_envio_google %}
+                            <p class="mb-0">
+                                <strong>Último Envio:</strong><br>
+                                <small class="text-muted">{{ client.ultimo_envio_google }}</small>
+                            </p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Formulário de geração de relatório -->
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">
+                    <i class="fas fa-file-download me-2"></i>
+                    Gerar Relatório
+                </h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('generate_report') }}" id="reportForm">
+                    <input type="hidden" name="client_id" value="{{ client.id }}">
+                    <input type="hidden" name="platform" value="{{ platform }}">
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="start_date" class="form-label">
+                                <i class="fas fa-calendar-alt me-1"></i>
+                                Data de Início
+                            </label>
+                            <input type="date" class="form-control" id="start_date" name="start_date" required>
+                            <div class="form-text">Selecione a data de início do período</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="end_date" class="form-label">
+                                <i class="fas fa-calendar-alt me-1"></i>
+                                Data de Fim
+                            </label>
+                            <input type="date" class="form-control" id="end_date" name="end_date" required>
+                            <div class="form-text">Selecione a data de fim do período</div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Importante:</strong> O período máximo permitido é de 90 dias. 
+                        As datas não podem ser futuras.
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('index') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>Voltar
+                        </a>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-success" onclick="sendToWhatsApp()" id="whatsappBtn">
+                                <i class="fab fa-whatsapp me-2"></i>
+                                Enviar para WhatsApp
+                            </button>
+                            <button type="submit" class="btn btn-{{ 'primary' if platform == 'facebook' else 'warning' }}">
+                                <i class="fas fa-download me-2"></i>
+                                Gerar Relatório {{ platform|title }}
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Informações adicionais -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Informações do Relatório
+                </h5>
+            </div>
+            <div class="card-body">
+                <h6>Dados Incluídos no Relatório:</h6>
+                {% if platform == 'facebook' %}
+                <ul class="list-unstyled">
+                    <li><i class="fas fa-check text-success me-2"></i>ID da Conta</li>
+                    <li><i class="fas fa-check text-success me-2"></i>ID e Nome das Campanhas</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Alcance e Impressões</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Gastos</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Cliques em Links</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Visualizações da Landing Page</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Conversões do Pixel:
+                        <ul class="ms-3 mt-1">
+                            <li>Adicionar ao Carrinho</li>
+                            <li>Iniciar Checkout</li>
+                            <li>Leads</li>
+                            <li>Compras</li>
+                            <li>Registros</li>
+                        </ul>
+                    </li>
+                    <li><i class="fas fa-check text-success me-2"></i>Conversações Iniciadas</li>
+                </ul>
+                {% elif platform == 'google' %}
+                <ul class="list-unstyled">
+                    <li><i class="fas fa-check text-success me-2"></i>ID da Campanha</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Nome da Campanha</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Data do Relatório</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Número de Cliques</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Conversões</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Valor das Conversões</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Taxa de Cliques (CTR)</li>
+                    <li><i class="fas fa-check text-success me-2"></i>CPC Médio</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Impressões</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Custo Total</li>
+                </ul>
+                {% endif %}
+                
+                <hr>
+                
+                <h6>Formato do Arquivo:</h6>
+                <p class="small text-muted mb-2">
+                    <i class="fas fa-file-csv me-1"></i>
+                    CSV (Excel compatível)
+                </p>
+                
+                <h6>Estrutura de Dados:</h6>
+                <p class="small text-muted mb-0">
+                    O relatório seguirá exatamente a mesma estrutura 
+                    dos relatórios existentes para máxima compatibilidade.
+                </p>
+            </div>
+        </div>
+        
+        <!-- Status da conta -->
+        {% if platform == 'facebook' %}
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="fas fa-chart-line me-2"></i>
+                    Status da Conta
+                </h6>
+            </div>
+            <div class="card-body">
+                {% if client.get('Saldo Facebook') %}
+                    <p class="mb-2">
+                        <strong>Saldo:</strong> 
+                        <span class="text-success">R$ {{ "%.2f"|format(client.get('Saldo Facebook', 0)) }}</span>
+                    </p>
+                {% endif %}
+                
+                {% if client.get('Boleto Face') %}
+                    <p class="mb-0">
+                        <strong>Boleto:</strong>
+                        <span class="badge bg-{{ 'success' if client.get('Boleto Face') else 'secondary' }}">
+                            {{ 'Ativo' if client.get('Boleto Face') else 'Inativo' }}
+                        </span>
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Configuração de datas
+document.addEventListener('DOMContentLoaded', function() {
+    const startDate = document.getElementById('start_date');
+    const endDate = document.getElementById('end_date');
+    const today = new Date();
+    const maxDate = today.toISOString().split('T')[0];
+    
+    // Define data máxima como hoje
+    startDate.max = maxDate;
+    endDate.max = maxDate;
+    
+    // Define data padrão (últimos 30 dias)
+    const thirtyDaysAgo = new Date(today);
+    thirtyDaysAgo.setDate(today.getDate() - 30);
+    
+    startDate.value = thirtyDaysAgo.toISOString().split('T')[0];
+    endDate.value = maxDate;
+    
+    // Validação do período
+    function validateDateRange() {
+        const start = new Date(startDate.value);
+        const end = new Date(endDate.value);
+        const diffTime = Math.abs(end - start);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        const submitBtn = document.querySelector('button[type="submit"]');
+        const form = document.getElementById('reportForm');
+        
+        if (diffDays > 90) {
+            startDate.setCustomValidity('O período não pode exceder 90 dias');
+            endDate.setCustomValidity('O período não pode exceder 90 dias');
+            submitBtn.disabled = true;
+        } else if (start > end) {
+            startDate.setCustomValidity('A data de início deve ser anterior à data de fim');
+            submitBtn.disabled = true;
+        } else if (end > today) {
+            endDate.setCustomValidity('A data de fim não pode ser futura');
+            submitBtn.disabled = true;
+        } else {
+            startDate.setCustomValidity('');
+            endDate.setCustomValidity('');
+            submitBtn.disabled = false;
+        }
+    }
+    
+    startDate.addEventListener('change', validateDateRange);
+    endDate.addEventListener('change', validateDateRange);
+    
+    // Validação inicial
+    validateDateRange();
+});
+
+// Loading no submit
+document.getElementById('reportForm').addEventListener('submit', function() {
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Gerando Relatório...';
+    
+    // Restaura o botão após 30 segundos (fallback)
+    setTimeout(() => {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+    }, 30000);
+});
+
+// Função para enviar via WhatsApp
+function sendToWhatsApp() {
+    const form = document.getElementById('reportForm');
+    const startDate = document.getElementById('start_date').value;
+    const endDate = document.getElementById('end_date').value;
+    const whatsappBtn = document.getElementById('whatsappBtn');
+    
+    // Validação das datas
+    if (!startDate || !endDate) {
+        alert('Por favor, selecione as datas de início e fim antes de enviar.');
+        return;
+    }
+    
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const today = new Date();
+    
+    if (start > end) {
+        alert('A data de início deve ser anterior à data de fim.');
+        return;
+    }
+    
+    if (end > today) {
+        alert('A data de fim não pode ser futura.');
+        return;
+    }
+    
+    const diffTime = Math.abs(end - start);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays > 90) {
+        alert('O período não pode exceder 90 dias.');
+        return;
+    }
+    
+    // Confirmação
+    if (!confirm('Tem certeza que deseja enviar o relatório via WhatsApp?\n\nPeríodo: ' + startDate + ' a ' + endDate)) {
+        return;
+    }
+    
+    // Loading no botão WhatsApp
+    const originalText = whatsappBtn.innerHTML;
+    whatsappBtn.disabled = true;
+    whatsappBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Enviando...';
+    
+    // Cria formulário para envio
+    const whatsappForm = document.createElement('form');
+    whatsappForm.method = 'POST';
+    whatsappForm.action = '{{ url_for("send_whatsapp") }}';
+    whatsappForm.style.display = 'none';
+    
+    // Adiciona os campos
+    const fields = {
+        'client_id': '{{ client.id }}',
+        'platform': '{{ platform }}',
+        'start_date': startDate,
+        'end_date': endDate
+    };
+    
+    for (const [name, value] of Object.entries(fields)) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = name;
+        input.value = value;
+        whatsappForm.appendChild(input);
+    }
+    
+    document.body.appendChild(whatsappForm);
+    whatsappForm.submit();
+    
+    // Restaura o botão após 30 segundos (fallback)
+    setTimeout(() => {
+        whatsappBtn.disabled = false;
+        whatsappBtn.innerHTML = originalText;
+    }, 30000);
+}
+</script>
+{% endblock %}

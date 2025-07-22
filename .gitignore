@@ -1,0 +1,8 @@
+# Arquivos de configuracao sensivel 
+.env 
+.env.* 
+client_secret_*.json 
+__pycache__/ 
+*.pyc 
+logs/ 
+backup/ 

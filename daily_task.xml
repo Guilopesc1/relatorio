@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <Triggers>
+    <CalendarTrigger>
+      <StartBoundary>2025-01-01T06:00:00</StartBoundary>
+      <Enabled>true</Enabled>
+      <ScheduleByDay>
+        <DaysInterval>1</DaysInterval>
+      </ScheduleByDay>
+    </CalendarTrigger>
+  </Triggers>
+  <Actions>
+    <Exec>
+      <Command>C:\Python313\python.exe</Command>
+      <Arguments>"C:\Users\Gui\MCP_Servers\Facebook3\daily_auto_update.py"</Arguments>
+      <WorkingDirectory>C:\Users\Gui\MCP_Servers\Facebook3</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>

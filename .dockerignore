@@ -1,0 +1,59 @@
+# Arquivos e diretórios a serem ignorados no build Docker
+
+# Logs e dados locais
+logs/
+*.log
+log.*
+
+# Cache Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.pytest_cache/
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE e editores
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Arquivos do Windows
+Thumbs.db
+Desktop.ini
+
+# Arquivos temporários
+*.tmp
+*.temp
+.DS_Store
+
+# Documentação local
+docs/
+*.md
+README*
+
+# Scripts de desenvolvimento
+debug.bat
+start.bat
+test_*
+verificar_*
+
+# Configurações locais
+.env.local
+.env.development
+
+# Dados de teste
+data/
+client_secret_*.json

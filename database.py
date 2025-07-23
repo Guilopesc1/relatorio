@@ -114,6 +114,102 @@ class Database:
         except Exception as e:
             print(f"Erro ao buscar cliente {client_id}: {e}")
             return None
+            
+    # =============================================
+    # MÉTODOS PARA USUÁRIOS ESPECÍFICOS
+    # =============================================
+    
+    def get_user_facebook_clients(self, user_id: str) -> List[Dict]:
+        """
+        Busca clientes Facebook que o usuário tem acesso
+        """
+        try:
+            # Query para buscar clientes do usuário via JOIN
+            response = self.supabase.table('user_clients') \
+                .select('*, relatorio_cadastro_clientes(*)') \
+                .eq('user_id', user_id) \
+                .eq('platform', 'facebook') \
+                .eq('is_active', True) \
+                .execute()
+            
+            facebook_clients = []
+            for user_client in response.data:
+                if user_client.get('relatorio_cadastro_clientes'):
+                    client = user_client['relatorio_cadastro_clientes']
+                    # Verificar se cliente ainda está ativo no Facebook
+                    if client.get('roda_facebook', False):
+                        facebook_clients.append(client)
+            
+            print(f"Debug: {len(facebook_clients)} clientes Facebook encontrados para usuário {user_id}")
+            return facebook_clients
+            
+        except Exception as e:
+            print(f"Erro ao buscar clientes Facebook do usuário: {e}")
+            return []
+    
+    def get_user_google_clients(self, user_id: str) -> List[Dict]:
+        """
+        Busca clientes Google Ads que o usuário tem acesso
+        """
+        try:
+            # Query para buscar clientes do usuário via JOIN
+            response = self.supabase.table('user_clients') \
+                .select('*, relatorio_cadastro_clientes(*)') \
+                .eq('user_id', user_id) \
+                .eq('platform', 'google') \
+                .eq('is_active', True) \
+                .execute()
+            
+            google_clients = []
+            for user_client in response.data:
+                if user_client.get('relatorio_cadastro_clientes'):
+                    client = user_client['relatorio_cadastro_clientes']
+                    # Verificar se cliente ainda está ativo no Google
+                    if client.get('roda_google', False):
+                        google_clients.append(client)
+            
+            print(f"Debug: {len(google_clients)} clientes Google encontrados para usuário {user_id}")
+            return google_clients
+            
+        except Exception as e:
+            print(f"Erro ao buscar clientes Google do usuário: {e}")
+            return []
+    
+    def grant_user_access_to_client(self, user_id: str, client_id: int, platform: str) -> bool:
+        """
+        Concede acesso de um usuário a um cliente específico
+        """
+        try:
+            response = self.supabase.table('user_clients').insert({
+                'user_id': user_id,
+                'client_id': client_id,
+                'platform': platform,
+                'is_active': True
+            }).execute()
+            
+            return bool(response.data)
+            
+        except Exception as e:
+            print(f"Erro ao conceder acesso: {e}")
+            return False
+    
+    def revoke_user_access_to_client(self, user_id: str, client_id: int, platform: str) -> bool:
+        """
+        Remove acesso de um usuário a um cliente específico
+        """
+        try:
+            response = self.supabase.table('user_clients') \
+                .update({'is_active': False}) \
+                .eq('user_id', user_id) \
+                .eq('client_id', client_id) \
+                .eq('platform', platform) \
+                .execute()
+            
+            return bool(response.data)
+            
+        except Exception as e:
+            print(f"Erro ao revogar acesso: {e}")
+            return False
     
     def update_last_facebook_report(self, client_id: int, report_date: str):
         """

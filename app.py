@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, session
 import os
 import csv
 import io
@@ -7,6 +7,9 @@ from database import Database
 from facebook_api import FacebookAPI
 from google_ads_api import GoogleAdsAPI
 from evolution_api import EvolutionAPI
+from auth_manager import AuthManager
+from google_oauth import GoogleAdsOAuth
+from client_discovery import ClientDiscovery
 from dotenv import load_dotenv
 
 # Carrega variáveis de ambiente
@@ -20,22 +23,19 @@ db = Database()
 fb_api = FacebookAPI()
 google_ads_api = GoogleAdsAPI()
 evolution_api = EvolutionAPI()
+auth_manager = AuthManager()
+google_oauth = GoogleAdsOAuth(auth_manager)
+client_discovery = ClientDiscovery()
 
 @app.route('/')
 def index():
-    """Página inicial com lista de clientes"""
-    try:
-        facebook_clients = db.get_active_facebook_clients()
-        google_clients = db.get_active_google_clients()
-        
-        return render_template('index.html', 
-                             facebook_clients=facebook_clients,
-                             google_clients=google_clients)
-    except Exception as e:
-        flash(f"Erro ao carregar clientes: {str(e)}", 'error')
-        return render_template('index.html', 
-                             facebook_clients=[],
-                             google_clients=[])
+    """Página inicial - redireciona para dashboard se logado"""
+    # Se usuário está logado, redirecionar para dashboard
+    if session.get('user_id') or session.get('auth_token'):
+        return redirect(url_for('dashboard'))
+    
+    # Se não está logado, mostrar página de login
+    return redirect(url_for('login'))
 
 @app.route('/client/<int:client_id>/<platform>')
 def client_page(client_id, platform):
@@ -775,6 +775,324 @@ def process_facebook_mass_update(client, start_date, end_date):
             'success': False,
             'message': str(e)
         }
+
+# =============================================
+# ROTAS DE AUTENTICAÇÃO
+# =============================================
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Página de login"""
+    if request.method == 'GET':
+        return render_template('login.html')
+    
+    # Processar login via form (fallback)
+    email = request.form.get('email')
+    password = request.form.get('password')
+    
+    if email and password:
+        result = auth_manager.authenticate_user(email, password)
+        if result['success']:
+            session['auth_token'] = result['token']
+            session['user_id'] = result['user']['id']
+            flash('Login realizado com sucesso!', 'success')
+            return redirect(url_for('dashboard'))
+        else:
+            flash(result['message'], 'error')
+    
+    return render_template('login.html')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    """Página de registro"""
+    if request.method == 'GET':
+        return render_template('register.html')
+    
+    # Processar registro via form (fallback)
+    name = request.form.get('name')
+    email = request.form.get('email')
+    password = request.form.get('password')
+    
+    if name and email and password:
+        result = auth_manager.create_user(email, password, name)
+        if result['success']:
+            flash('Registro realizado com sucesso! Faça login para continuar.', 'success')
+            return redirect(url_for('login'))
+        else:
+            flash(result['message'], 'error')
+    
+    return render_template('register.html')
+
+@app.route('/dashboard')
+@auth_manager.require_auth
+def dashboard():
+    """Dashboard principal do usuário autenticado com lista de clientes"""
+    try:
+        user = request.current_user
+        user_id = user['id']
+        
+        # Carregar apenas clientes que o usuário tem acesso
+        facebook_clients = db.get_user_facebook_clients(user_id)
+        google_clients = db.get_user_google_clients(user_id)
+        
+        return render_template('dashboard.html',
+                             facebook_clients=facebook_clients,
+                             google_clients=google_clients)
+    except Exception as e:
+        flash(f"Erro ao carregar clientes: {str(e)}", 'error')
+        return render_template('dashboard.html',
+                             facebook_clients=[],
+                             google_clients=[])
+
+@app.route('/logout')
+def logout():
+    """Logout do usuário"""
+    session.clear()
+    flash('Logout realizado com sucesso!', 'success')
+    return redirect(url_for('login'))
+
+# =============================================
+# API ROUTES PARA AUTENTICAÇÃO
+# =============================================
+
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    """API endpoint para login"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        password = data.get('password')
+        
+        if not email or not password:
+            return jsonify({'success': False, 'message': 'Email e senha são obrigatórios'}), 400
+        
+        result = auth_manager.authenticate_user(email, password)
+        
+        if result['success']:
+            # Armazenar na sessão também
+            session['auth_token'] = result['token']
+            session['user_id'] = result['user']['id']
+            
+            return jsonify({
+                'success': True,
+                'token': result['token'],
+                'user': {
+                    'id': result['user']['id'],
+                    'email': result['user']['email'],
+                    'name': result['user'].get('name')
+                }
+            })
+        else:
+            return jsonify({'success': False, 'message': result['message']}), 401
+            
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro interno: {str(e)}'}), 500
+
+@app.route('/api/grant-google-clients', methods=['POST'])
+@auth_manager.require_auth
+def api_grant_google_clients():
+    """API endpoint para conceder acesso aos clientes selecionados"""
+    try:
+        user = request.current_user
+        user_id = user['id']
+        
+        data = request.get_json()
+        selected_customers = data.get('selected_customers', [])
+        
+        if not selected_customers:
+            return jsonify({'success': False, 'message': 'Nenhum cliente selecionado'}), 400
+        
+        # Conceder acesso aos clientes selecionados
+        result = client_discovery.grant_access_to_selected_clients(user_id, selected_customers)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro interno: {str(e)}'}), 500
+
+@app.route('/api/discover-google-clients', methods=['POST'])
+@auth_manager.require_auth
+def api_discover_google_clients():
+    """API endpoint para descobrir clientes Google Ads automaticamente"""
+    try:
+        user = request.current_user
+        user_id = user['id']
+        
+        # Descobrir clientes
+        result = client_discovery.discover_google_clients(user_id)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro interno: {str(e)}'}), 500
+
+@app.route('/api/google-test', methods=['POST'])
+@auth_manager.require_auth
+def api_google_test():
+    """API endpoint para testar conexão com Google Ads"""
+    try:
+        user = request.current_user
+        user_id = user['id']
+        
+        # Testar conexão
+        result = google_oauth.test_connection(user_id)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro interno: {str(e)}'}), 500
+
+@app.route('/api/google-revoke', methods=['POST'])
+@auth_manager.require_auth
+def api_google_revoke():
+    """API endpoint para revogar acesso ao Google Ads"""
+    try:
+        user = request.current_user
+        user_id = user['id']
+        
+        # Revogar acesso
+        success = google_oauth.revoke_access(user_id)
+        
+        if success:
+            return jsonify({'success': True, 'message': 'Acesso ao Google Ads revogado com sucesso'})
+        else:
+            return jsonify({'success': False, 'message': 'Erro ao revogar acesso'})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro interno: {str(e)}'}), 500
+
+@app.route('/api/register', methods=['POST'])
+def api_register():
+    """API endpoint para registro"""
+    try:
+        data = request.get_json()
+        name = data.get('name')
+        email = data.get('email')
+        password = data.get('password')
+        
+        if not all([name, email, password]):
+            return jsonify({'success': False, 'message': 'Nome, email e senha são obrigatórios'}), 400
+        
+        result = auth_manager.create_user(email, password, name)
+        
+        if result['success']:
+            return jsonify({'success': True, 'message': 'Usuário criado com sucesso'})
+        else:
+            return jsonify({'success': False, 'message': result['message']}), 400
+            
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro interno: {str(e)}'}), 500
+
+@app.route('/api/user', methods=['GET'])
+@auth_manager.require_auth
+def api_user():
+    """API endpoint para obter dados do usuário autenticado"""
+    try:
+        user = request.current_user
+        return jsonify({
+            'success': True,
+            'user': {
+                'id': user['id'],
+                'email': user['email'],
+                'name': user.get('name'),
+                'last_login': user.get('last_login')
+            }
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro interno: {str(e)}'}), 500
+
+@app.route('/api/oauth-status', methods=['GET'])
+@auth_manager.require_auth
+def api_oauth_status():
+    """API endpoint para verificar status das conexões OAuth"""
+    try:
+        user = request.current_user
+        user_id = user['id']
+        
+        # Verificar tokens
+        facebook_token = auth_manager.get_facebook_token(user_id)
+        google_tokens = auth_manager.get_google_token(user_id)
+        
+        return jsonify({
+            'success': True,
+            'facebook_connected': facebook_token is not None,
+            'google_connected': google_tokens is not None and google_tokens.get('access_token') is not None
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro interno: {str(e)}'}), 500
+
+# =============================================
+# OAUTH ROUTES (Placeholder - implementar no próximo passo)
+# =============================================
+
+@app.route('/auth/facebook')
+def auth_facebook():
+    """Iniciar OAuth com Facebook"""
+    # TODO: Implementar no próximo passo
+    flash('Integração com Facebook será implementada no próximo passo', 'info')
+    return redirect(url_for('dashboard'))
+
+@app.route('/auth/google')
+@auth_manager.require_auth
+def auth_google():
+    """Iniciar OAuth com Google Ads"""
+    try:
+        user = request.current_user
+        user_id = user['id']
+        
+        # Gerar URL de autorização
+        auth_url = google_oauth.get_authorization_url(user_id)
+        
+        if auth_url:
+            return redirect(auth_url)
+        else:
+            flash('Erro ao gerar URL de autorização', 'error')
+            return redirect(url_for('dashboard'))
+            
+    except Exception as e:
+        flash(f'Erro ao iniciar autenticação: {str(e)}', 'error')
+        return redirect(url_for('dashboard'))
+
+@app.route('/auth/facebook/callback')
+def auth_facebook_callback():
+    """Callback do OAuth Facebook"""
+    # TODO: Implementar no próximo passo
+    return redirect(url_for('dashboard'))
+
+@app.route('/auth/google/callback')
+def auth_google_callback():
+    """Callback do OAuth Google"""
+    try:
+        # Obter código de autorização e state dos parâmetros
+        authorization_code = request.args.get('code')
+        state = request.args.get('state')
+        error = request.args.get('error')
+        
+        # Verificar se houve erro na autorização
+        if error:
+            flash(f'Erro na autorização: {error}', 'error')
+            return redirect(url_for('dashboard'))
+        
+        if not authorization_code:
+            flash('Código de autorização não fornecido', 'error')
+            return redirect(url_for('dashboard'))
+        
+        # Processar callback
+        result = google_oauth.handle_callback(authorization_code, state)
+        
+        if result['success']:
+            flash(result['message'], 'success')
+            print(f"[DEBUG] Redirecionando para dashboard com show_google_clients=true")
+            # Redirecionar para dashboard com parâmetro para mostrar modal
+            return redirect(url_for('dashboard', show_google_clients='true'))
+        else:
+            flash(result['message'], 'error')
+        
+        return redirect(url_for('dashboard'))
+        
+    except Exception as e:
+        flash(f'Erro no callback: {str(e)}', 'error')
+        return redirect(url_for('dashboard'))
 
 def process_google_mass_update(client, start_date, end_date):
     """Processa atualização de um cliente Google"""

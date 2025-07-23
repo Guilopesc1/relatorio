@@ -8,6 +8,12 @@ __pycache__/
 logs/ 
 backup/ 
 
+# Debug tools (nao committar)
+debug_tools/
+*.backup.*
+diagnostic_report.json
+FINAL_TEST_INSTRUCTIONS.md
+
 # IDE
 .vscode/
 .idea/
@@ -20,3 +26,7 @@ Thumbs.db
 *.egg-info/
 dist/
 build/
+
+# Arquivos temporarios
+status.txt
+verificar_modificacoes.py

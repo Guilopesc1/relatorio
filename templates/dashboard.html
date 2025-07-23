@@ -1,0 +1,659 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Facebook Reports System{% endblock %}
+
+{% block content %}
+<style>
+.client-card {
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.client-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.card-sm {
+    border: 1px solid #e0e0e0;
+}
+
+.card-sm .card-body {
+    padding: 0.5rem;
+}
+
+.alert-sm {
+    padding: 0.5rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.875rem;
+}
+
+#clientManagementModal .modal-dialog {
+    max-width: 90vw;
+}
+
+#clientManagementModal .card {
+    transition: all 0.2s ease;
+}
+
+#clientManagementModal .card:hover {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.badge {
+    font-size: 0.75em;
+}
+
+.btn-sm {
+    font-size: 0.8em;
+}
+</style>
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="fas fa-tachometer-alt text-primary"></i> Dashboard</h2>
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-user"></i> <span id="user-name">Usuário</span>
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="#" onclick="logout()">
+                            <i class="fas fa-sign-out-alt"></i> Sair
+                        </a></li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Status de Conexões OAuth -->
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <i class="fab fa-facebook text-primary"></i> Facebook Ads
+                            </h5>
+                            <p class="card-text">
+                                <span id="facebook-status" class="badge bg-secondary">Não conectado</span>
+                            </p>
+                            <a href="/auth/facebook" class="btn btn-primary btn-sm">
+                                <i class="fas fa-link"></i> Conectar
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <i class="fab fa-google text-danger"></i> Google Ads
+                            </h5>
+                            <p class="card-text">
+                                <span id="google-status" class="badge bg-secondary">Não conectado</span>
+                            </p>
+                            <div class="d-flex gap-2">
+                                <a href="/auth/google" class="btn btn-danger btn-sm">
+                                    <i class="fas fa-link"></i> Conectar
+                                </a>
+                                <button class="btn btn-outline-danger btn-sm" onclick="testGoogleConnection()">
+                                    <i class="fas fa-vial"></i> Testar
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" onclick="revokeGoogleAccess()">
+                                    <i class="fas fa-unlink"></i> Desconectar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lista de Clientes -->
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5><i class="fas fa-users"></i> Meus Clientes</h5>
+                    <button class="btn btn-primary" onclick="manageGoogleClients()" id="addClientBtn" style="display: none;">
+                        <i class="fas fa-plus"></i> Adicionar Novo Cliente
+                    </button>
+                </div>
+                <div class="card-body">
+                    {% if facebook_clients or google_clients %}
+                        <div class="row">
+                            <!-- Clientes Facebook -->
+                            {% for client in facebook_clients %}
+                            <div class="col-md-6 col-lg-4 mb-3">
+                                <div class="card client-card h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title">
+                                            <i class="fab fa-facebook text-primary"></i>
+                                            {{ client.name or 'Cliente Facebook' }}
+                                        </h6>
+                                        <p class="card-text text-muted small">
+                                            ID: {{ client.id }}<br>
+                                            Último relatório: {{ client.ultimo_relatorio_fb or 'Nunca' }}
+                                        </p>
+                                        <div class="d-flex gap-2">
+                                            <a href="{{ url_for('client_page', client_id=client.id, platform='facebook') }}" 
+                                               class="btn btn-primary btn-sm">
+                                                <i class="fas fa-chart-line"></i> Ver Relatórios
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                            
+                            <!-- Clientes Google -->
+                            {% for client in google_clients %}
+                            <div class="col-md-6 col-lg-4 mb-3">
+                                <div class="card client-card h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title">
+                                            <i class="fab fa-google text-danger"></i>
+                                            {{ client.name or 'Cliente Google Ads' }}
+                                        </h6>
+                                        <p class="card-text text-muted small">
+                                            ID: {{ client.id }}<br>
+                                            Último relatório: {{ client.ultimo_relatorio_google or 'Nunca' }}
+                                        </p>
+                                        <div class="d-flex gap-2">
+                                            <a href="{{ url_for('client_page', client_id=client.id, platform='google') }}" 
+                                               class="btn btn-danger btn-sm">
+                                                <i class="fas fa-chart-line"></i> Ver Relatórios
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">Nenhum cliente encontrado</h5>
+                            <p class="text-muted">
+                                Conecte suas contas do Facebook e Google Ads para começar a gerenciar seus clientes.
+                            </p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Verificar autenticação ao carregar a página
+document.addEventListener('DOMContentLoaded', function() {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+        window.location.href = '/login';
+        return;
+    }
+    
+    // Carregar dados do usuário
+    loadUserData();
+    loadConnectionStatus();
+    loadClients();
+    
+    // Verificar se deve mostrar modal de seleção de clientes Google
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('show_google_clients') === 'true') {
+        console.log('Parâmetro show_google_clients detectado, aguardando conexão...');
+        // Aguardar um pouco para garantir que a página carregou e verificar se Google está conectado
+        setTimeout(() => {
+            // Só mostrar modal se Google estiver conectado
+            fetch('/api/oauth-status', {
+                headers: {
+                    'Authorization': 'Bearer ' + localStorage.getItem('auth_token')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.google_connected) {
+                    console.log('Google conectado, executando manageGoogleClients...');
+                    manageGoogleClients();
+                } else {
+                    console.log('Google não conectado, modal não será exibido');
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao verificar status:', error);
+            });
+        }, 1000);
+        
+        // Limpar parâmetro da URL
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, '', newUrl);
+    } else {
+        console.log('Parâmetro show_google_clients não encontrado na URL');
+    }
+});
+
+function loadUserData() {
+    const token = localStorage.getItem('auth_token');
+    
+    fetch('/api/user', {
+        headers: {
+            'Authorization': 'Bearer ' + token
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('user-name').textContent = data.user.name || data.user.email;
+        }
+    })
+    .catch(error => {
+        console.error('Erro ao carregar dados do usuário:', error);
+    });
+}
+
+function loadConnectionStatus() {
+    const token = localStorage.getItem('auth_token');
+    
+    fetch('/api/oauth-status', {
+        headers: {
+            'Authorization': 'Bearer ' + token
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Atualizar status do Facebook
+            const facebookStatus = document.getElementById('facebook-status');
+            if (data.facebook_connected) {
+                facebookStatus.textContent = 'Conectado';
+                facebookStatus.className = 'badge bg-success';
+            }
+            
+            // Atualizar status do Google
+            const googleStatus = document.getElementById('google-status');
+            const addClientBtn = document.getElementById('addClientBtn');
+            
+            if (data.google_connected) {
+                googleStatus.textContent = 'Conectado';
+                googleStatus.className = 'badge bg-success';
+                // Mostrar botão de adicionar cliente se Google estiver conectado
+                if (addClientBtn) {
+                    addClientBtn.style.display = 'block';
+                }
+            } else {
+                // Ocultar botão se Google não estiver conectado
+                if (addClientBtn) {
+                    addClientBtn.style.display = 'none';
+                }
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Erro ao carregar status de conexões:', error);
+    });
+}
+
+function loadClients() {
+    // Clientes já são carregados pelo servidor
+    console.log('Clientes carregados pelo servidor');
+}
+
+function logout() {
+    localStorage.removeItem('auth_token');
+    window.location.href = '/login';
+}
+
+function testGoogleConnection() {
+    const token = localStorage.getItem('auth_token');
+    
+    // Mostrar loading
+    const originalText = event.target.innerHTML;
+    event.target.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testando...';
+    event.target.disabled = true;
+    
+    fetch('/api/google-test', {
+        method: 'POST',
+        headers: {
+            'Authorization': 'Bearer ' + token
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Conexão com Google Ads funcionando!\n\n' + 
+                  'Contas acessíveis: ' + (data.accessible_customers ? data.accessible_customers.length : 0));
+        } else {
+            alert('Erro na conexão: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Erro ao testar conexão:', error);
+        alert('Erro ao testar conexão');
+    })
+    .finally(() => {
+        // Restaurar botão
+        event.target.innerHTML = originalText;
+        event.target.disabled = false;
+    });
+}
+
+function revokeGoogleAccess() {
+    if (!confirm('Tem certeza que deseja desconectar sua conta Google Ads?')) {
+        return;
+    }
+    
+    const token = localStorage.getItem('auth_token');
+    
+    fetch('/api/google-revoke', {
+        method: 'POST',
+        headers: {
+            'Authorization': 'Bearer ' + token
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            loadConnectionStatus(); // Recarregar status
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Erro ao revogar acesso:', error);
+        alert('Erro ao revogar acesso');
+    });
+}
+
+function manageGoogleClients() {
+    console.log('Iniciando gerenciamento de clientes Google...');
+    const token = localStorage.getItem('auth_token');
+    
+    if (!token) {
+        console.error('Token de autenticação não encontrado');
+        alert('Erro: Token de autenticação não encontrado');
+        return;
+    }
+    
+    // Mostrar loading
+    const manageButton = document.querySelector('button[onclick="manageGoogleClients()"]');
+    let originalText = 'Carregando...';
+    if (manageButton) {
+        originalText = manageButton.innerHTML;
+        manageButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Carregando...';
+        manageButton.disabled = true;
+    }
+    
+    console.log('Fazendo requisição para /api/discover-google-clients...');
+    
+    fetch('/api/discover-google-clients', {
+        method: 'POST',
+        headers: {
+            'Authorization': 'Bearer ' + token
+        }
+    })
+    .then(response => {
+        console.log('Resposta recebida:', response.status);
+        return response.json();
+    })
+    .then(data => {
+        console.log('Dados da resposta:', data);
+        if (data.success) {
+            console.log('Sucesso! Mostrando modal com', data.clients ? data.clients.length : 0, 'clientes');
+            showClientManagementModal(data.clients);
+        } else {
+            console.error('Erro na descoberta:', data.message);
+            alert('Erro: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Erro na requisição:', error);
+        alert('Erro ao carregar clientes: ' + error.message);
+    })
+    .finally(() => {
+        // Restaurar botão se existir
+        if (manageButton) {
+            manageButton.innerHTML = originalText;
+            manageButton.disabled = false;
+        }
+    });
+}
+
+function showClientManagementModal(clients) {
+    // Verificar se há MCCs
+    const hasMCC = clients.some(client => client.is_manager);
+    
+    // Separar clientes já vinculados dos disponíveis
+    const linkedClients = clients.filter(client => client.has_access);
+    const availableClients = clients.filter(client => !client.has_access);
+    
+    // Criar modal dinamicamente com melhor estrutura para gerenciamento
+    const modalHtml = `
+        <div class="modal fade" id="clientManagementModal" tabindex="-1">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fab fa-google text-danger"></i> 
+                            Gerenciar Clientes Google Ads
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row">
+                            <!-- Clientes Já Vinculados -->
+                            <div class="col-md-6">
+                                <h6 class="text-success mb-3">
+                                    <i class="fas fa-check-circle"></i> 
+                                    Clientes Vinculados (${linkedClients.length})
+                                </h6>
+                                ${linkedClients.length > 0 ? `
+                                    <div class="mb-3">
+                                        ${linkedClients.map(client => `
+                                            <div class="card mb-2 border-success">
+                                                <div class="card-body py-2">
+                                                    <div class="d-flex justify-content-between align-items-center">
+                                                        <div>
+                                                            <strong><i class="fas fa-${client.is_manager ? 'building' : 'user-circle'}"></i> ${client.name}</strong>
+                                                            <span class="badge bg-${client.is_manager ? 'primary' : 'secondary'} ms-2">${client.type}</span><br>
+                                                            <small class="text-muted">
+                                                                ID: ${client.customer_id} | ${client.currency}
+                                                            </small>
+                                                        </div>
+                                                        <button class="btn btn-outline-danger btn-sm" onclick="removeClient('${client.customer_id}')">
+                                                            <i class="fas fa-unlink"></i> Remover
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                ` : `
+                                    <div class="text-center py-4 text-muted">
+                                        <i class="fas fa-inbox fa-2x mb-2"></i>
+                                        <p>Nenhum cliente vinculado ainda</p>
+                                    </div>
+                                `}
+                            </div>
+                            
+                            <!-- Clientes Disponíveis -->
+                            <div class="col-md-6">
+                                <h6 class="text-primary mb-3">
+                                    <i class="fas fa-plus-circle"></i> 
+                                    Clientes Disponíveis (${availableClients.length})
+                                </h6>
+                                ${availableClients.length > 0 ? `
+                                    ${hasMCC ? `
+                                        <div class="alert alert-info alert-sm">
+                                            <i class="fas fa-info-circle"></i>
+                                            <strong>MCCs Encontrados:</strong> Você pode vincular contas individuais ou as próprias MCCs.
+                                        </div>
+                                    ` : ''}
+                                    
+                                    <div id="availableClientsList">
+                                        ${availableClients.map(client => {
+                                            if (client.is_manager) {
+                                                // Render MCC com contas filhas
+                                                return `
+                                                    <div class="card mb-3 border-primary">
+                                                        <div class="card-header bg-light">
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="checkbox" 
+                                                                       value="${client.customer_id}" 
+                                                                       id="client_${client.customer_id}">
+                                                                <label class="form-check-label d-flex justify-content-between align-items-center w-100" 
+                                                                       for="client_${client.customer_id}">
+                                                                    <div>
+                                                                        <strong><i class="fas fa-building"></i> ${client.name}</strong>
+                                                                        <span class="badge bg-primary ms-2">${client.type}</span><br>
+                                                                        <small class="text-muted">
+                                                                            ID: ${client.customer_id} | ${client.currency}
+                                                                        </small>
+                                                                    </div>
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        ${client.child_accounts && client.child_accounts.length > 0 ? `
+                                                            <div class="card-body">
+                                                                <h6 class="text-muted mb-2">
+                                                                    <i class="fas fa-sitemap"></i> 
+                                                                    Contas Gerenciadas (${client.child_accounts.length}):
+                                                                </h6>
+                                                                <div class="row">
+                                                                    ${client.child_accounts.map(child => `
+                                                                        <div class="col-md-6 mb-2">
+                                                                            <div class="card card-sm">
+                                                                                <div class="card-body py-2">
+                                                                                    <div class="form-check">
+                                                                                        <input class="form-check-input" type="checkbox" 
+                                                                                               value="${child.customer_id}" 
+                                                                                               id="child_${child.customer_id}">
+                                                                                        <label class="form-check-label" for="child_${child.customer_id}">
+                                                                                            <strong>${child.name}</strong><br>
+                                                                                            <small class="text-muted">ID: ${child.customer_id} | ${child.currency}</small>
+                                                                                        </label>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    `).join('')}
+                                                                </div>
+                                                            </div>
+                                                        ` : ''}
+                                                    </div>
+                                                `;
+                                            } else {
+                                                // Render conta regular
+                                                return `
+                                                    <div class="card mb-2">
+                                                        <div class="card-body py-2">
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="checkbox" 
+                                                                       value="${client.customer_id}" 
+                                                                       id="client_${client.customer_id}">
+                                                                <label class="form-check-label d-flex justify-content-between align-items-center" 
+                                                                       for="client_${client.customer_id}">
+                                                                    <div>
+                                                                        <strong><i class="fas fa-user-circle"></i> ${client.name}</strong>
+                                                                        <span class="badge bg-secondary ms-2">${client.type}</span><br>
+                                                                        <small class="text-muted">
+                                                                            ID: ${client.customer_id} | ${client.currency} | ${client.status}
+                                                                        </small>
+                                                                    </div>
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                `;
+                                            }
+                                        }).join('')}
+                                    </div>
+                                ` : `
+                                    <div class="text-center py-4 text-muted">
+                                        <i class="fas fa-search fa-2x mb-2"></i>
+                                        <p>Todos os clientes disponíveis já estão vinculados</p>
+                                    </div>
+                                `}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <i class="fas fa-times"></i> Fechar
+                        </button>
+                        ${availableClients.length > 0 ? `
+                            <button type="button" class="btn btn-success" onclick="addSelectedClients()">
+                                <i class="fas fa-plus"></i> Adicionar Selecionados
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remover modal existente se houver
+    const existingModal = document.getElementById('clientManagementModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Adicionar modal ao body
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Mostrar modal
+    const modal = new bootstrap.Modal(document.getElementById('clientManagementModal'));
+    modal.show();
+}
+
+function addSelectedClients() {
+    const selectedCheckboxes = document.querySelectorAll('#availableClientsList input[type="checkbox"]:checked');
+    const selectedCustomers = Array.from(selectedCheckboxes).map(cb => cb.value);
+    
+    if (selectedCustomers.length === 0) {
+        alert('Selecione pelo menos um cliente para adicionar.');
+        return;
+    }
+    
+    const token = localStorage.getItem('auth_token');
+    
+    fetch('/api/grant-google-clients', {
+        method: 'POST',
+        headers: {
+            'Authorization': 'Bearer ' + token,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            selected_customers: selectedCustomers
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message + '\n\nA página será recarregada para mostrar os novos clientes.');
+            
+            // Fechar modal e recarregar página
+            const modal = bootstrap.Modal.getInstance(document.getElementById('clientManagementModal'));
+            modal.hide();
+            
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Erro ao adicionar clientes:', error);
+        alert('Erro ao adicionar clientes');
+    });
+}
+
+function removeClient(customer_id) {
+    if (!confirm('Tem certeza que deseja remover este cliente?')) {
+        return;
+    }
+    
+    // TODO: Implementar remoção de cliente
+    // Por enquanto, apenas alerta que a funcionalidade será implementada
+    alert('Funcionalidade de remoção será implementada em breve.\n\nPor enquanto, você pode desconectar e reconectar o Google Ads para resetar os clientes.');
+}
+</script>
+{% endblock %}

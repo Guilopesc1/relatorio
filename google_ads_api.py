@@ -18,12 +18,13 @@ class GoogleAdsAPI:
         self.refresh_token = os.getenv("GOOGLE_ADS_REFRESH_TOKEN")
         self.login_customer_id = os.getenv("GOOGLE_ADS_LOGIN_CUSTOMER_ID")
         
-        # Inicializa cliente do Google Ads
+        # Inicializa cliente do Google Ads (pode ser None se token expirado)
         self.client = self._initialize_client()
     
-    def _initialize_client(self) -> GoogleAdsClient:
+    def _initialize_client(self) -> Optional[GoogleAdsClient]:
         """
         Inicializa o cliente da API do Google Ads (v18)
+        Retorna None se houver erro (token expirado, etc.)
         """
         try:
             # Configuração do cliente para v18
@@ -41,11 +42,19 @@ class GoogleAdsAPI:
                 google_ads_config["login_customer_id"] = self.login_customer_id.strip()
                 print(f"[DEBUG] Usando login_customer_id: {self.login_customer_id.strip()}")
             
-            return GoogleAdsClient.load_from_dict(google_ads_config)
+            client = GoogleAdsClient.load_from_dict(google_ads_config)
+            print("[DEBUG] Cliente Google Ads inicializado com sucesso (token do .env)")
+            return client
             
         except Exception as e:
-            print(f"Erro ao inicializar cliente Google Ads: {e}")
-            raise Exception(f"Falha na configuração da API Google Ads: {str(e)}")
+            print(f"[WARNING] Token do .env expirado/inválido: {e}")
+            print("[INFO] Sistema continuará funcionando com OAuth dos usuários")
+            return None
+    
+    def _check_client_available(self):
+        """Verifica se o cliente Google Ads está disponível"""
+        if not self.client:
+            raise Exception("Cliente Google Ads não está disponível. Token expirado ou credenciais inválidas.")
     
     def validate_date_range(self, start_date: str, end_date: str) -> bool:
         """
@@ -76,6 +85,9 @@ class GoogleAdsAPI:
             start_date: Data início (YYYY-MM-DD)
             end_date: Data fim (YYYY-MM-DD)
         """
+        
+        # Verificar se cliente está inicializado
+        self._check_client_available()
         
         if not self.validate_date_range(start_date, end_date):
             raise ValueError("Período inválido. Máximo de 90 dias e datas válidas.")
@@ -201,7 +213,6 @@ class GoogleAdsAPI:
                     print(f"Customer ID inválido para teste: '{customer_id}'")
                     return False
                 
-                # Testa com customer_id específico
                 ga_service = self.client.get_service("GoogleAdsService")
                 
                 query = """

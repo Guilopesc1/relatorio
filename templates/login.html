@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}Login - Facebook Reports System{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-4">
+            <div class="card shadow">
+                <div class="card-body">
+                    <div class="text-center mb-4">
+                        <h3><i class="fas fa-sign-in-alt text-primary"></i> Login</h3>
+                        <p class="text-muted">Acesse sua conta</p>
+                    </div>
+
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show" role="alert">
+                                    {{ message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+
+                    <form id="loginForm" method="POST">
+                        <div class="mb-3">
+                            <label for="email" class="form-label">E-mail</label>
+                            <input type="email" class="form-control" id="email" name="email" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="password" class="form-label">Senha</label>
+                            <input type="password" class="form-control" id="password" name="password" required>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-sign-in-alt"></i> Entrar
+                            </button>
+                        </div>
+                    </form>
+
+                    <hr class="my-4">
+
+                    <!-- OAuth Login Buttons -->
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('auth_facebook') }}" class="btn btn-primary">
+                            <i class="fab fa-facebook-f"></i> Conectar com Facebook
+                        </a>
+                        
+                        <a href="{{ url_for('auth_google') }}" class="btn btn-danger">
+                            <i class="fab fa-google"></i> Conectar com Google Ads
+                        </a>
+                    </div>
+
+                    <div class="text-center mt-3">
+                        <p class="text-muted">
+                            Não tem conta? 
+                            <a href="{{ url_for('register') }}" class="text-decoration-none">Registre-se aqui</a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('loginForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+    
+    fetch('/api/login', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            email: email,
+            password: password
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            localStorage.setItem('auth_token', data.token);
+            window.location.href = '/dashboard';
+        } else {
+            alert(data.message || 'Erro ao fazer login');
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao fazer login');
+    });
+});
+</script>
+{% endblock %}

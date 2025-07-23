@@ -75,6 +75,17 @@
         .gap-2 {
             gap: 0.5rem;
         }
+        
+        .client-card {
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: 1px solid #e9ecef;
+        }
+        
+        .client-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border-color: #007bff;
+        }
     </style>
 </head>
 <body>
@@ -85,10 +96,59 @@
                 <i class="fab fa-facebook-f me-2"></i>
                 Facebook Reports System
             </a>
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="{{ url_for('index') }}">
-                    <i class="fas fa-home me-1"></i>Início
-                </a>
+            
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('index') }}">
+                            <i class="fas fa-home me-1"></i>Início
+                        </a>
+                    </li>
+                    <!-- Verificar se usuário está logado para mostrar dashboard -->
+                    {% if session.get('user_id') %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('dashboard') }}">
+                            <i class="fas fa-tachometer-alt me-1"></i>Dashboard
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+                
+                <ul class="navbar-nav">
+                    {% if session.get('user_id') %}
+                    <!-- Usuário logado -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user me-1"></i>Conta
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('dashboard') }}">
+                                <i class="fas fa-tachometer-alt me-1"></i>Dashboard
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('logout') }}">
+                                <i class="fas fa-sign-out-alt me-1"></i>Sair
+                            </a></li>
+                        </ul>
+                    </li>
+                    {% else %}
+                    <!-- Usuário não logado -->
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('login') }}">
+                            <i class="fas fa-sign-in-alt me-1"></i>Login
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('register') }}">
+                            <i class="fas fa-user-plus me-1"></i>Registrar
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
             </div>
         </div>
     </nav>

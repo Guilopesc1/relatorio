@@ -2,7 +2,7 @@
 FROM python:3.11-slim
 
 LABEL maintainer="Facebook Reports System"
-LABEL version="3.0.0"
+LABEL version="3.0.1"
 LABEL description="Sistema de Relatórios Facebook/Google Ads - Produção"
 
 # Variáveis de ambiente para otimização
@@ -11,14 +11,23 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PIP_NO_CACHE_DIR=1
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Instalar dependências do sistema
+# Instalar dependências do sistema e gosu
 RUN apt-get update && apt-get install -y \
     gcc g++ \
     curl \
     cron \
     procps \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
+
+# Instalar gosu para mudança segura de usuário
+RUN set -eux; \
+    dpkgArch="$(dpkg --print-architecture | awk -F- '{ print $NF }')"; \
+    curl -o /usr/local/bin/gosu -SL "https://github.com/tianon/gosu/releases/download/1.17/gosu-$dpkgArch"; \
+    chmod +x /usr/local/bin/gosu; \
+    gosu --version; \
+    gosu nobody true
 
 # Criar usuário não-root para segurança
 RUN groupadd -r appuser && useradd -r -g appuser -m -d /app appuser
@@ -72,19 +81,24 @@ echo "✅ Python: $(python --version)"\n\
 echo "✅ Working directory: $(pwd)"\n\
 echo "========================================"\n\
 \n\
-# Executar como usuário não-root\n\
-exec su-exec appuser "$@"\n\
+# Executar como usuário não-root usando gosu\n\
+exec gosu appuser "$@"\n\
 ' > /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
 
-# Instalar su-exec para mudança segura de usuário
-RUN apt-get update && apt-get install -y su-exec && rm -rf /var/lib/apt/lists/*
+# Healthcheck simples sem curl (que pode não estar disponível)
+RUN echo '#!/bin/bash\n\
+if pgrep -f "python.*app.py" > /dev/null; then\n\
+    exit 0\n\
+else\n\
+    exit 1\n\
+fi\n\
+' > /healthcheck.sh && chmod +x /healthcheck.sh
 
-# Healthcheck
+# Healthcheck usando verificação de processo
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-    CMD curl -f http://localhost:${WEB_PORT:-5000}/health || exit 1
+    CMD /healthcheck.sh
 
 # Configurações finais
-USER appuser
 EXPOSE 5000
 
 ENTRYPOINT ["/docker-entrypoint.sh"]

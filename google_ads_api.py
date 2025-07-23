@@ -16,23 +16,24 @@ class GoogleAdsAPI:
         self.client_id = os.getenv("GOOGLE_ADS_CLIENT_ID")
         self.client_secret = os.getenv("GOOGLE_ADS_CLIENT_SECRET")
         self.refresh_token = os.getenv("GOOGLE_ADS_REFRESH_TOKEN")
-        self.login_customer_id = os.getenv("GOOGLE_ADS_LOGIN_CUSTOMER_ID")  # Novo
+        self.login_customer_id = os.getenv("GOOGLE_ADS_LOGIN_CUSTOMER_ID")
         
         # Inicializa cliente do Google Ads
         self.client = self._initialize_client()
     
     def _initialize_client(self) -> GoogleAdsClient:
         """
-        Inicializa o cliente da API do Google Ads
+        Inicializa o cliente da API do Google Ads (v18)
         """
         try:
-            # Configuração do cliente
+            # Configuração do cliente para v18
             google_ads_config = {
                 "developer_token": self.developer_token,
                 "client_id": self.client_id,
                 "client_secret": self.client_secret,
                 "refresh_token": self.refresh_token,
-                "use_proto_plus": True
+                "use_proto_plus": True,
+                "version": "v18"  # Especifica versão v18
             }
             
             # Adiciona login_customer_id se estiver configurado
@@ -68,7 +69,7 @@ class GoogleAdsAPI:
     
     def get_campaigns_report(self, customer_id: str, start_date: str, end_date: str) -> List[Dict]:
         """
-        Busca relatório de campanhas do Google Ads
+        Busca relatório de campanhas do Google Ads (API v18)
         
         Args:
             customer_id: ID do cliente Google Ads (formato: 1234567890)
@@ -89,7 +90,7 @@ class GoogleAdsAPI:
         try:
             ga_service = self.client.get_service("GoogleAdsService")
             
-            # Query GAQL baseada nas colunas do CSV fornecido
+            # Query GAQL baseada nas colunas do CSV fornecido (v18)
             query = f"""
                 SELECT 
                     campaign.id,
@@ -138,7 +139,9 @@ class GoogleAdsAPI:
             print(f"Google Ads API Exception: {ex}")
             error_details = []
             for error in ex.failure.errors:
-                error_details.append(f"{error.error_code.name}: {error.message}")
+                # Correção: usar error_code.error_code em vez de error_code.name
+                error_code = getattr(error.error_code, 'error_code', 'UNKNOWN_ERROR')
+                error_details.append(f"{error_code}: {error.message}")
             raise Exception(f"Erro na API Google Ads: {'; '.join(error_details)}")
         
         except Exception as e:
@@ -165,7 +168,7 @@ class GoogleAdsAPI:
             date_str = str(segments.date)
         
         return {
-            'campaign_id': int(campaign.id),  # ID da campanha vai para campaign_id
+            'campaign_id': int(campaign.id),
             'nome_campanha': campaign.name,
             'dia': date_str,
             'clicks': int(metrics.clicks),
@@ -175,13 +178,12 @@ class GoogleAdsAPI:
             'average_cpc': float(average_cpc),
             'impressions': int(metrics.impressions),
             'cost': float(cost),
-            # Campos do nosso sistema - id_google = customer_id
-            'customer_id': customer_id  # Mantém para uso interno, será movido para id_google na hora de salvar
+            'customer_id': customer_id
         }
     
     def test_connection(self, customer_id: str = None) -> bool:
         """
-        Testa conexão com a API do Google Ads
+        Testa conexão com a API do Google Ads (v18)
         """
         try:
             if not customer_id:
